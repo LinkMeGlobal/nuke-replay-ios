@@ -113,7 +113,7 @@ public struct NukeReplayConfiguration: Sendable {
         release: String,
         sessionProvider: any NukeReplaySessionProviding,
         maxHistoryMinutes: Int = 30,
-        maxStorageBytes: Int = 250 * 1_024 * 1_024,
+        maxStorageBytes: Int = 200 * 1_024 * 1_024,
         idleFramesPerSecond: Double = 1,
         activeFramesPerSecond: Double = 6
     ) {

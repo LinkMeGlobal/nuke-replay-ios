@@ -11,7 +11,7 @@ the package receives only the replay-scoped capability returned by the replay
 service.
 
 ```swift
-let client = NukeReplayClient(configuration: .init(
+let client = try NukeReplayClient(configuration: .init(
     appID: "ios-linkme",
     endpoint: URL(string: "https://replay.nuke.bio")!,
     environment: "production",
