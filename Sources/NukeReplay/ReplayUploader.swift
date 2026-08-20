@@ -26,7 +26,7 @@ actor ReplayUploader {
                     captureFormat: "nuke-ios@1",
                     release: configuration.release,
                     environment: configuration.environment,
-                    sdkVersion: "0.1.0",
+                    sdkVersion: NukeReplaySDKVersion,
                     startedAt: pending.startedAtMs
                 )
             )

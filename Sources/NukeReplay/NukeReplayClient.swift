@@ -74,6 +74,7 @@ public final class NukeReplayClient: ObservableObject {
     }
 
     public func presentReporter(from presenter: UIViewController) {
+        guard started else { return }
         guard presenter.presentedViewController == nil else { return }
         let reporter = NukeReplayReporter(client: self)
         let hosting = UIHostingController(rootView: reporter)
@@ -83,10 +84,12 @@ public final class NukeReplayClient: ObservableObject {
     }
 
     public func recordNavigation(route: String) {
+        guard started else { return }
         append(.init(type: "navigation", attributes: ["route": route]))
     }
 
     public func recordError(_ error: Error, context: [String: String] = [:]) {
+        guard started else { return }
         append(.init(type: "error", attributes: context.merging([
             "name": String(describing: type(of: error)),
             "message": String(error.localizedDescription.prefix(2_000))
@@ -102,6 +105,7 @@ public final class NukeReplayClient: ObservableObject {
         duration: TimeInterval?,
         error: Error?
     ) {
+        guard started else { return }
         let safeURL = url.deletingQueryAndFragment().absoluteString
         guard !Self.isCredentialEndpoint(safeURL) else { return }
         var attributes: [String: String] = ["method": method, "url": safeURL]
@@ -128,7 +132,7 @@ public final class NukeReplayClient: ObservableObject {
             captureFormat: "nuke-ios@1",
             release: configuration.release,
             environment: configuration.environment,
-            sdkVersion: "0.1.0",
+            sdkVersion: NukeReplaySDKVersion,
             startedAt: Self.nowMs - Int64(configuration.maxHistoryMinutes * 60 * 1_000)
         ))
         preparedKey = key

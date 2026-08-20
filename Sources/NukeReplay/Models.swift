@@ -1,5 +1,7 @@
 import Foundation
 
+let NukeReplaySDKVersion = "0.1.2"
+
 public struct NukeReplayProject: Codable, Hashable, Identifiable, Sendable {
     public let id: String
     public let name: String
