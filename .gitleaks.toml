@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic idempotency key used by the wire-format unit test"
+regexTarget = "secret"
+regexes = [
+  '''^0123456789abcdef$''',
+]
