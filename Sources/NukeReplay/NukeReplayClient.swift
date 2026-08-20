@@ -13,6 +13,7 @@ public final class NukeReplayClient: ObservableObject {
     }
 
     @Published public private(set) var state: State = .idle
+    @Published public private(set) var uploadProgress: NukeReplayUploadProgress?
 
     private let configuration: NukeReplayConfiguration
     private let store: ReplayStore
@@ -21,9 +22,12 @@ public final class NukeReplayClient: ObservableObject {
     private let monitor = ReplayInteractionMonitor()
     private var segments: [ReplaySegment] = []
     private var events: [NukeReplaySemanticEvent] = []
+    private var eventBytes = 0
+    private let maxEventBytes: Int
     private var preparedSession: NukeReplaySession?
     private var preparedKey: String?
     private var observers: [NSObjectProtocol] = []
+    private var uploadTask: Task<Void, Never>?
     private var started = false
 
     public init(configuration: NukeReplayConfiguration) throws {
@@ -33,11 +37,13 @@ public final class NukeReplayClient: ObservableObject {
             maxBytes: configuration.maxStorageBytes
         )
         self.store = store
+        maxEventBytes = min(2 * 1_024 * 1_024, max(256 * 1_024, configuration.maxStorageBytes / 10))
         uploader = ReplayUploader(configuration: configuration, store: store)
         capture = ReplayVideoCapture(
             store: store,
             idleFPS: configuration.idleFramesPerSecond,
-            activeFPS: configuration.activeFramesPerSecond
+            activeFPS: configuration.activeFramesPerSecond,
+            maxFrameDimension: configuration.maxFrameDimension
         )
         capture.onSegment = { [weak self] segment in
             Task { @MainActor in await self?.accept(segment) }
@@ -146,6 +152,10 @@ public final class NukeReplayClient: ObservableObject {
         do {
             let result: NukeReplaySubmitResult
             if includeReplay {
+                uploadProgress = .init(phase: .preparing)
+                if let currentSegment = await capture.flush() {
+                    await accept(currentSegment)
+                }
                 let now = Self.nowMs
                 let cutoff = now - Int64(report.historyMinutes * 60 * 1_000)
                 let selected = segments.filter { $0.endedAtMs >= cutoff }
@@ -162,7 +172,8 @@ public final class NukeReplayClient: ObservableObject {
                     eventsURL: eventsURL
                 )
                 try await store.savePending(pending)
-                result = try await uploader.submit(pending)
+                result = try await uploader.createReport(pending)
+                beginPendingUpload()
             } else {
                 result = try await configuration.sessionProvider.submitDiagnostics(report)
             }
@@ -189,17 +200,43 @@ public final class NukeReplayClient: ObservableObject {
 
     private func append(_ event: NukeReplaySemanticEvent) {
         events.append(event)
+        eventBytes += Self.estimatedBytes(of: event)
         let cutoff = Self.nowMs - Int64(configuration.maxHistoryMinutes * 60 * 1_000)
-        if let firstKept = events.firstIndex(where: { $0.timestampMs >= cutoff }), firstKept > 0 {
-            events.removeFirst(firstKept)
+        while let first = events.first,
+              first.timestampMs < cutoff || eventBytes > maxEventBytes || events.count > 20_000 {
+            eventBytes -= Self.estimatedBytes(of: first)
+            events.removeFirst()
         }
-        if events.count > 20_000 { events.removeFirst(events.count - 20_000) }
     }
 
     private func retryPendingIfNeeded() async {
-        guard let pending = try? await store.pending(),
-              pending.createdAtMs + 24 * 60 * 60 * 1_000 > Self.nowMs else { return }
-        _ = try? await uploader.submit(pending)
+        guard let pending = try? await store.pending() else { return }
+        guard pending.createdAtMs + 24 * 60 * 60 * 1_000 > Self.nowMs else {
+            await store.discardPendingIfPresent()
+            return
+        }
+        do {
+            if pending.result == nil { _ = try await uploader.createReport(pending) }
+            beginPendingUpload()
+        } catch {
+            uploadProgress = .init(phase: .failed, reference: pending.result?.reference)
+        }
+    }
+
+    private func beginPendingUpload() {
+        guard uploadTask == nil else { return }
+        let uploader = uploader
+        uploadTask = Task { [weak self] in
+            do {
+                try await uploader.finishPending { [weak self] progress in
+                    Task { @MainActor in self?.uploadProgress = progress }
+                }
+            } catch {
+                let reference = self?.uploadProgress?.reference
+                self?.uploadProgress = .init(phase: .failed, reference: reference)
+            }
+            self?.uploadTask = nil
+        }
     }
 
     private func observeLifecycle() {
@@ -226,6 +263,12 @@ public final class NukeReplayClient: ObservableObject {
         let capped = data.prefix(bytes)
         if let text = String(data: capped, encoding: .utf8) { return text }
         return Data(capped).base64EncodedString()
+    }
+
+    private static func estimatedBytes(of event: NukeReplaySemanticEvent) -> Int {
+        64 + event.type.utf8.count + event.attributes.reduce(0) {
+            $0 + $1.key.utf8.count + $1.value.utf8.count + 8
+        }
     }
 
     private static func isCredentialEndpoint(_ value: String) -> Bool {

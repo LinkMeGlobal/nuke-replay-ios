@@ -1,6 +1,6 @@
 import Foundation
 
-let NukeReplaySDKVersion = "0.1.2"
+let NukeReplaySDKVersion = "0.2.0"
 
 public struct NukeReplayProject: Codable, Hashable, Identifiable, Sendable {
     public let id: String
@@ -80,6 +80,28 @@ public struct NukeReplaySubmitResult: Codable, Sendable {
     public let replayStatus: String
 }
 
+public struct NukeReplayUploadProgress: Equatable, Sendable {
+    public enum Phase: String, Sendable {
+        case preparing
+        case uploading
+        case processing
+        case complete
+        case failed
+    }
+
+    public let phase: Phase
+    public let uploadedBytes: Int64
+    public let totalBytes: Int64
+    public let reference: String?
+
+    public init(phase: Phase, uploadedBytes: Int64 = 0, totalBytes: Int64 = 0, reference: String? = nil) {
+        self.phase = phase
+        self.uploadedBytes = uploadedBytes
+        self.totalBytes = totalBytes
+        self.reference = reference
+    }
+}
+
 public struct NukeReplaySemanticEvent: Codable, Sendable {
     public let type: String
     public let timestampMs: Int64
@@ -107,6 +129,7 @@ public struct NukeReplayConfiguration: Sendable {
     public let maxStorageBytes: Int
     public let idleFramesPerSecond: Double
     public let activeFramesPerSecond: Double
+    public let maxFrameDimension: Int
 
     public init(
         appID: String,
@@ -117,7 +140,8 @@ public struct NukeReplayConfiguration: Sendable {
         maxHistoryMinutes: Int = 30,
         maxStorageBytes: Int = 200 * 1_024 * 1_024,
         idleFramesPerSecond: Double = 1,
-        activeFramesPerSecond: Double = 6
+        activeFramesPerSecond: Double = 6,
+        maxFrameDimension: Int = 1_080
     ) {
         self.appID = appID
         self.endpoint = endpoint
@@ -128,6 +152,7 @@ public struct NukeReplayConfiguration: Sendable {
         self.maxStorageBytes = maxStorageBytes
         self.idleFramesPerSecond = min(max(idleFramesPerSecond, 0.5), 8)
         self.activeFramesPerSecond = min(max(activeFramesPerSecond, 1), 8)
+        self.maxFrameDimension = min(max(maxFrameDimension, 480), 1_920)
     }
 }
 

@@ -30,9 +30,11 @@ final class ModelsTests: XCTestCase {
             release: "test",
             sessionProvider: Provider(),
             idleFramesPerSecond: 100,
-            activeFramesPerSecond: 100
+            activeFramesPerSecond: 100,
+            maxFrameDimension: 10_000
         )
         XCTAssertEqual(config.idleFramesPerSecond, 8)
         XCTAssertEqual(config.activeFramesPerSecond, 8)
+        XCTAssertEqual(config.maxFrameDimension, 1_920)
     }
 }

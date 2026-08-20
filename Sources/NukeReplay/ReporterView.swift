@@ -107,7 +107,11 @@ struct NukeReplayReporter: View {
             historyMinutes: historyMinutes
         )
         Task {
-            do { reference = try await client.submit(report, includeReplay: includeReplay).reference }
+            do {
+                reference = try await client.submit(report, includeReplay: includeReplay).reference
+                try? await Task.sleep(for: .milliseconds(700))
+                close()
+            }
             catch { errorMessage = error.localizedDescription }
             submitting = false
         }
